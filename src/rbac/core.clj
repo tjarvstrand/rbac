@@ -18,51 +18,39 @@
             [clojure.set    :as set]
             [rbac.context   :as context]))
 
-(defn- resource-parent [id]
-  (if-not (= id "/")
-    (string/join (butlast (string/split id #"/")) "/")))
-
-(defn- get-entry [context id type]
-  (if-let [resource (case type
-                          :resource (context/get-resource context id)
-                          :role     (context/get-role context id))]
+(defn- get-resource [context id]
+  (if-let [resource (context/get-resource context id)]
     resource
-    (throw (ex-info (format "%s %s doesn't exist" (name type) id)
-                    {:cause  :no-exists
-                     type    id}))))
-
-(defn- authorized-on-entry? [context entry-id entry-type permission as-id]
-  (if (and (= :resource entry-type) (= "/" entry-id) (= :delete permission))
-    false
-    (let [role  (get-entry context as-id :role)
-          entry (get-entry context entry-id entry-type)]
-      (or (= (:owner entry) as-id)
-          (some #{permission} (get-in entry [:permissions as-id]))))))
+    (throw (ex-info (format    "Resource %s doesn't exist"
+                               (string/join ":" id))
+                    {:cause    :no-exists
+                     :resource id}))))
 
 (defn authorized? [context resource-id permission as-id]
-  (authorized-on-entry? context resource-id :resource permission as-id))
+  (if (and (or (= [] resource-id)
+               (= ["roles"] resource-id)
+               (= ["roles" "admin"] resource-id))
+           (= :delete permission))
+    false
+    (let [role     (get-resource context ["roles" as-id])
+          resource (get-resource context resource-id)]
+      (or (= (:owner resource) as-id)
+          (some #{permission} (get-in resource [:permissions as-id]))))))
 
-(defn- assert-authorized [context entry-id entry-type permission as-id]
-  (if-not (and (string? entry-id)
-               (authorized-on-entry? context
-                                     entry-id
-                                     entry-type
-                                     permission as-id))
-    (throw (ex-info (format "%s does not have permission %s on %s %s"
+(defn- assert-authorized [context resource-id permission as-id]
+  (if-not (authorized? context resource-id permission as-id)
+    (throw (ex-info (format "Role %s does not have permission %s on %s"
                             as-id
                             permission
-                            (name entry-type)
-                            entry-id)
-                    {:cause  :unauthorized
-                     :action permission
-                     :as    as-id
-                     entry-type entry-id}))))
+                            resource-id)
+                    {:cause     :unauthorized
+                     :action    permission
+                     :as        as-id
+                     :resource  (string/join ":" resource-id)}))))
 
-(defn- assert-no-entry [context id type]
-  (if (case type
-        :resource (context/get-resource context id)
-        :role     (context/get-role context id))
-    (throw (ex-info (format    "%s %s already exists" (name type) id)
+(defn- assert-no-resource [context id]
+  (if (context/get-resource context id)
+    (throw (ex-info (format    "Resource %s already exists" id)
                     {:cause    :exists
                      type id}))))
 
@@ -72,60 +60,52 @@
       (throw (ex-info (format    "Illegal role permissions: %s" illegal)
                       {:cause    :illegal-permissions})))))
 
-(defn create-role
-  [context id as-id]
-  (get-entry context as-id :role) ;; assert that role exists
-  (assert-no-entry context id :role)
-  (context/put-role context (context/role id as-id)))
+(defn create-resource [context id as-id]
+  (get-resource context ["roles" as-id]) ;; assert that role exists
+  (assert-authorized context (drop-last id) :create as-id)
+  (assert-no-resource context id)
+  (context/put-resource context (context/role id as-id)))
 
-(defn create-resource
-  [context id as-id]
-  (assert-authorized context (resource-parent id) :resource :create as-id)
-  (assert-no-entry context id :resource)
-  (context/put-resource context (context/resource id as-id)))
+(defn create-role [context id as-id]
+  (create-resource context ["roles" id] as-id))
 
-(defn read-role
-  [context id as-id]
-  (assert-authorized context id :role :read as-id)
-  (get-entry context id :role))
+(defn read-resource [context id as-id]
+  (assert-authorized context id :read as-id)
+  (get-entry context id as-id))
 
-(defn read-resource
-  [context id as-id]
-  (assert-authorized context id :resource :read as-id)
-  (get-entry context id :resource as-id))
+(defn read-role [context id as-id]
+  (read-resource context ["roles" id] as-id))
 
-(defn delete-role
-  ([context id as-id]
-   (assert-authorized context id :role :delete as-id)
-   (context/delete-role context id)))
+(defn delete-resource [context id as-id]
+  (assert-authorized context id :delete as-id)
+  (context/delete-resource context id))
 
-(defn delete-resource
-  ([context id as-id]
-   (assert-authorized context id :resource :delete as-id)
-   (context/delete-resource context id)))
+(defn delete-role [context id as-id]
+  (delete-resource context ["roles" id] as-id))
 
 (defn- assert-permissions [permissions type]
   (case type
     :role (assert-role-permissions)
     :resource true))
 
-(defn grant-permissions [context on-id on-type permissions to-id as-id]
-  (assert-permissions permissions on-type)
-  (get-entry context to-id :role) ;; assert that role exists
+(defn grant-resource-permissions [context on-id permissions to-id as-id]
   (doseq [perm (conj permissions :update)]
-    (assert-authorized context on-id on-type perm as-id))
+    (assert-authorized context on-id perm as-id))
+  (get-resource context ["roles" to-id]) ;; assert that role exists
   (let [entry (update-in (get-entry context on-id :resource)
                          [:permissions to-id]
                          #(set (into %1 permissions)))]
-    (case type
-      :role     (context/put-role context     entry)
-      :resource (context/put-resource context entry))))
+    (context/put-resource context entry)))
 
-(defn revoke-permissions [context on-id on-type permissions from-id as-id]
-  (assert-authorized context on-id on-type :update as-id)
+(defn grant-role-permissions [context on-id permissions to-id as-id]
+  (grant-resource-permissions context ["roles" on-id] permissions to-id as-id))
+
+(defn revoke-resource-permissions [context on-id permissions from-id as-id]
+  (assert-authorized context on-id :update as-id)
   (if-let [entry (update-in (get-entry context on-id :resource)
                             [:permissions on-id from-id]
                             #(set/difference %1 (set permissions)))]
-    (case type
-      :role     (context/put-role context     entry)
-      :resource (context/put-resource context entry))))
+    (context/put-resource context entry)))
+
+(defn revoke-role-permissions [context on-id permissions to-id as-id]
+  (revoke-resource-permissions context ["roles" on-id] permissions to-id as-id))

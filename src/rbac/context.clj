@@ -16,17 +16,12 @@
 (ns rbac.context
   (:require [clojure.string :as string]))
 
-(def permissions [:create :read :update :delete])
-
-(defrecord Role
-    [id
-     owner
-     members
-     permissions])
+(def actions [:create :read :update :delete])
 
 (defrecord Resource
     [id
      owner
+     members
      permissions])
 
 (defprotocol RBAC
@@ -40,25 +35,13 @@
     "Return resource with id from rbac")
 
   (delete-resource [rbac id]
-    "Delete resource with id from rbac")
-
-  (put-role [rbac role]
-    "Put role into rbac, overwriting any existing role with the same id.")
-
-  (get-role [rbac id]
-    "Return role with id from rbac")
-
-  (delete-role [rbac id]
-    "Delete role with id from rbac"))
+    "Delete resource with id from rbac"))
 
 (defn resource [id owner]
   (map->Resource {:id id :owner owner :permissions {}}))
 
-(defn role [id owner]
-  (map->Role {:id id :owner owner :members #{} :permissions {}}))
-
 (defn init [rbac]
   (-> rbac
-      (put-role     (role     "admin" "admin"))
-      (put-resource (resource "/"     "admin"))
-      (put-resource (resource "roles" "admin"))))
+      (put-resource (resource []        "admin"))
+      (put-resource (resource ["roles"] "admin"))
+      (put-resource (resource ["roles" "admin"] "admin"))))

@@ -26,16 +26,7 @@
       (get-in rbac [:resources id]))
 
     (delete-resource [rbac id]
-      (assoc-in rbac [:resources id] nil))
-
-    (put-role [rbac role]
-      (assoc-in rbac [:roles (:id role)] role))
-
-    (get-role [rbac id]
-      (get-in rbac [:roles id]))
-
-    (delete-role [rbac id]
-      (assoc-in rbac [:roles id] nil)))
+      (assoc-in rbac [:resources id] nil)))
 
 (defn new []
   (map->RBAC {:roles {}
