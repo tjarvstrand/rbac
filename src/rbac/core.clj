@@ -26,16 +26,19 @@
                     {:cause    :no-exists
                      :resource id}))))
 
+(defn- protected-resource? [resource-id]
+  (some #{resource-id} [[] ["roles"] ["roles" "admin"]]))
+
 (defn authorized? [context resource-id permission as-id]
-  (if (and (or (= [] resource-id)
-               (= ["roles"] resource-id)
-               (= ["roles" "admin"] resource-id))
-           (= :delete permission))
+  (if (and (protected-resource? resource-id) (= :delete permission))
     false
     (let [role     (get-resource context ["roles" as-id])
           resource (get-resource context resource-id)]
-      (or (= (:owner resource) as-id)
-          (some #{permission} (get-in resource [:permissions as-id]))))))
+
+      (if (= :give permission)
+        (= as-id (:owner resource))
+        (or (= (:owner resource) as-id)
+            (some #{permission} (get-in resource [:permissions as-id])))))))
 
 (defn- assert-authorized [context resource-id permission as-id]
   (if-not (authorized? context resource-id permission as-id)
@@ -52,7 +55,7 @@
   (if (context/get-resource context id)
     (throw (ex-info (format    "Resource %s already exists" id)
                     {:cause    :exists
-                     type id}))))
+                     :resource id}))))
 
 (defn- assert-role-permissions [permissions]
   (let [legal #{:read :update :delete}]
@@ -64,14 +67,14 @@
   (get-resource context ["roles" as-id]) ;; assert that role exists
   (assert-authorized context (drop-last id) :create as-id)
   (assert-no-resource context id)
-  (context/put-resource context (context/role id as-id)))
+  (context/put-resource context (context/resource id as-id)))
 
 (defn create-role [context id as-id]
   (create-resource context ["roles" id] as-id))
 
 (defn read-resource [context id as-id]
   (assert-authorized context id :read as-id)
-  (get-entry context id as-id))
+  (get-resource context id))
 
 (defn read-role [context id as-id]
   (read-resource context ["roles" id] as-id))
@@ -92,20 +95,28 @@
   (doseq [perm (conj permissions :update)]
     (assert-authorized context on-id perm as-id))
   (get-resource context ["roles" to-id]) ;; assert that role exists
-  (let [entry (update-in (get-entry context on-id :resource)
+  (let [resource (update-in (get-resource context on-id)
                          [:permissions to-id]
                          #(set (into %1 permissions)))]
-    (context/put-resource context entry)))
+    (context/put-resource context resource)))
 
 (defn grant-role-permissions [context on-id permissions to-id as-id]
   (grant-resource-permissions context ["roles" on-id] permissions to-id as-id))
 
 (defn revoke-resource-permissions [context on-id permissions from-id as-id]
   (assert-authorized context on-id :update as-id)
-  (if-let [entry (update-in (get-entry context on-id :resource)
+  (let [resource (update-in (get-resource context on-id)
                             [:permissions on-id from-id]
                             #(set/difference %1 (set permissions)))]
-    (context/put-resource context entry)))
+    (context/put-resource context resource)))
 
 (defn revoke-role-permissions [context on-id permissions to-id as-id]
   (revoke-resource-permissions context ["roles" on-id] permissions to-id as-id))
+
+(defn give-resource [context resource-id to-id as-id]
+  (get-resource context ["roles" to-id]) ;; assert that role exists
+  (assert-authorized context resource-id :give as-id)
+  (context/put-resource context
+                        (assoc (get-resource context resource-id)
+                               :owner
+                               to-id)))
