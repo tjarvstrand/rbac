@@ -13,11 +13,11 @@
 ;; See the License for the specific language governing permissions and
 ;; limitations under the License.
 
-(ns rbac-mock
-  (:require [rbac.context]))
+(ns tjarvstrand.rbac.mock-context
+  (:require [tjarvstrand.rbac.context]))
 
 (defrecord RBAC [resources roles superuser-id]
-    rbac.context/RBAC
+    tjarvstrand.rbac.context/Context
 
     (put-resource [rbac resource]
       (assoc-in rbac [:resources (:id resource)] resource))
@@ -31,5 +31,3 @@
 (defn new []
   (map->RBAC {:roles {}
               :resources {}}))
-
-

@@ -13,10 +13,10 @@
 ;; See the License for the specific language governing permissions and
 ;; limitations under the License.
 
-(ns rbac.core
-  (:require [clojure.string :as string]
-            [clojure.set    :as set]
-            [rbac.context   :as context]))
+(ns tjarvstrand.rbac.core
+  (:require [clojure.string           :as string]
+            [clojure.set              :as set]
+            [tjarvstrand.rbac.context :as context]))
 
 (defn- get-resource [context id]
   (if-let [resource (context/get-resource context id)]

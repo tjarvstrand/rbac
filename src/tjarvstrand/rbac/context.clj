@@ -13,7 +13,7 @@
 ;; See the License for the specific language governing permissions and
 ;; limitations under the License.
 
-(ns rbac.context
+(ns tjarvstrand.rbac.context
   (:require [clojure.string :as string]))
 
 (def actions [:create :read :update :delete])
@@ -24,7 +24,7 @@
      members
      permissions])
 
-(defprotocol RBAC
+(defprotocol Context
   "Role Based Access Control"
 
   (put-resource [rbac resource]

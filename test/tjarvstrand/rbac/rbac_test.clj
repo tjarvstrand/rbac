@@ -13,14 +13,14 @@
 ;; See the License for the specific language governing permissions and
 ;; limitations under the License.
 
-(ns rbac-test
+(ns tjarvstrand.rbac.rbac-test
   (:use midje.sweet)
-  (:require [rbac.core :refer :all]
-            [rbac.context :as context]
-            [rbac-mock]))
+  (:require [tjarvstrand.rbac.core         :refer :all]
+            [tjarvstrand.rbac.context      :as context]
+            [tjarvstrand.rbac.mock-context :as mock-context]))
 
 (defn- init-rbac []
-  (-> (context/init (rbac-mock/new))
+  (-> (context/init (mock-context/new))
       (context/put-resource (context/resource ["roles" "alice"] "admin"))
       (context/put-resource (context/resource ["roles" "bob"]   "admin"))
       (context/put-resource (context/resource ["a"] "admin"))
@@ -142,13 +142,19 @@
       :owner)
       => "alice")
 
+(fact (str "No client with can give away another client's ownership of a "
+           "resource (not even with :update permission")
+  (-> (init-rbac)
+      (grant-resource-permissions ["a"] [:update] "alice" "admin")
+      (give-resource ["a"] "bob" "alice"))
+      => (throws clojure.lang.ExceptionInfo
+             #(and (= :unauthorized (-> % ex-data :cause))
+                   (= "alice"       (-> % ex-data :as)))))
+
 (fact "When an action is removed from a resource, all permissions for that action are revoked")
 
 (fact "Only valid resource names can be used")
-(fact (str "A client with :update permission cannot give away another "
-           "client's ownership of a resource"))
-(fact (str "No client with can give away another client's ownership of a "
-           "resource (not even with :update permission")) ;; TODO
+ ;; TODO
 (fact "Resource permissions are transitive")
 (fact "When a resource is deleted it is deleted as a member from all other resources")
 (fact "It's not possible to grant invalid permissions on a resource") ;; TODO
