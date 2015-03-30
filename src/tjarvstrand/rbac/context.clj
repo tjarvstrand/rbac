@@ -16,11 +16,9 @@
 (ns tjarvstrand.rbac.context
   (:require [clojure.string :as string]))
 
-(def actions [:create :read :update :delete])
-
 (defrecord Resource
     [id
-     owner
+     owners
      members
      permissions])
 
@@ -37,11 +35,11 @@
   (delete-resource [rbac id]
     "Delete resource with id from rbac"))
 
-(defn resource [id owner]
-  (map->Resource {:id id :owner owner :permissions {}}))
+(defn resource [id owners]
+  (map->Resource {:id id :owners owners :permissions {} :members #{}}))
 
 (defn init [rbac]
   (-> rbac
-      (put-resource (resource []        "admin"))
-      (put-resource (resource ["roles"] "admin"))
-      (put-resource (resource ["roles" "admin"] "admin"))))
+      (put-resource (resource []        #{"admin"}))
+      (put-resource (resource ["roles"] #{"admin"}))
+      (put-resource (resource ["roles" "admin"] #{"admin"}))))
