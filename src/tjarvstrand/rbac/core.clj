@@ -148,7 +148,7 @@ java.lang.ExceptionInfo with :cause :exists."
                     {:cause    :invalid-permission
                      :resource illegal}))))
 
-(defn assert-id
+(defn- assert-id
   "Return iff id is a valid resource identifier, otherwise throws
 java.lang.ExceptionInfo with :cause :illegal-resource-id."
   [id]
@@ -157,6 +157,17 @@ java.lang.ExceptionInfo with :cause :illegal-resource-id."
                     {:cause    :illegal-resource-id
                      :resource id}))))
 
+(defn- assert-permissions
+    "Return iff all permissions are valid, otherwise throws
+java.lang.ExceptionInfo with :cause :illegal-resource-permissions."
+  [permissions]
+  (let [illegal (clojure.set/select #(not (keyword? %)) permissions)]
+    (when (not= #{} illegal)
+      (throw (ex-info (format       "Illegal resource permissions: %s"
+                                    permissions)
+                      {:cause       :illegal-resource-permissions
+                       :permissions illegal})))))
+
 (defn create-resource [context id as-id]
   (assert-id id)
   (get-role context as-id) ;; assert that role exists
@@ -164,8 +175,8 @@ java.lang.ExceptionInfo with :cause :illegal-resource-id."
   (assert-no-resource context id)
   (context/put-resource context (context/resource id #{as-id})))
 
-(defn create-role [context id as-id]
-  (create-resource context ["roles" id] as-id))
+(defn create-role [context id role as-id]
+  (create-resource context ["roles" id] role as-id))
 
 (defn read-resource [context id as-id]
   (assert-authorized context id :read as-id)
@@ -182,7 +193,7 @@ java.lang.ExceptionInfo with :cause :illegal-resource-id."
   (delete-resource context ["roles" id] as-id))
 
 (defn grant-resource-permissions [context on-id permissions to-id as-id]
-  (assert-permissions permissions)
+  (assert-permissions (set permissions))
   (doseq [perm (conj permissions :update)]
     (assert-authorized context on-id perm as-id))
   (get-role context to-id) ;; assert that role exists

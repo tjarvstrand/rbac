@@ -175,6 +175,7 @@ resource (not even with :update permission"
 (fact "Role memberships can be revoked")
 
  ;; TODO
+(fact "When a role is deleted it is deleted as a an owner from all other resources")
 (fact "When a resource is deleted it is deleted as a member from all other resources")
 (fact "It's not possible to grant invalid permissions on a resource") ;; TODO
 
