@@ -19,15 +19,18 @@
 (defrecord RBAC [resources roles superuser-id]
     tjarvstrand.rbac.context/Context
 
-    (put-resource [rbac resource]
-      (assoc-in rbac [:resources (:id resource)] resource))
+    (get-superuser-id [rbac]
+      (:superuser-id rbac))
 
-    (get-resource [rbac id]
-      (get-in rbac [:resources id]))
+    (put-role [rbac role]
+      (assoc-in rbac [:roles (:id role)] role))
 
-    (delete-resource [rbac id]
-      (assoc-in rbac [:resources id] nil)))
+    (get-role [rbac id]
+      (get-in rbac [:roles id]))
+
+    (delete-role [rbac id]
+      (assoc-in rbac [:roles id] nil)))
 
 (defn new []
   (map->RBAC {:roles {}
-              :resources {}}))
+              :superuser-id "superuser"}))

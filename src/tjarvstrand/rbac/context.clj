@@ -16,30 +16,30 @@
 (ns tjarvstrand.rbac.context
   (:require [clojure.string :as string]))
 
-(defrecord Resource
+(defrecord Role
     [id
-     owners
-     members
-     permissions])
+     permissions
+     roles])
 
 (defprotocol Context
   "Role Based Access Control"
 
-  (put-resource [rbac resource]
-    (str "Put resource into rbac, overwriting any existing Resource with the "
+  (get-superuser-id [context]
+    "Return the ID of the superuser")
+
+  (put-role [context role]
+    (str "Put role into context, overwriting any existing Role with the "
          "same id."))
 
-  (get-resource [rbac id]
-    "Return resource with id from rbac")
+  (get-role [context id]
+    "Return role with id from context")
 
-  (delete-resource [rbac id]
-    "Delete resource with id from rbac"))
+  (delete-role [context id]
+    "Delete role with id from context"))
 
-(defn resource [id owners]
-  (map->Resource {:id id :owners owners :permissions {} :members #{}}))
-
-(defn init [rbac]
-  (-> rbac
-      (put-resource (resource []        #{"admin"}))
-      (put-resource (resource ["roles"] #{"admin"}))
-      (put-resource (resource ["roles" "admin"] #{"admin"}))))
+(defn role
+  ([id]                   (role id {}))
+  ([id permissions]       (role id {} #{}))
+  ([id permissions roles] (map->Role {:id id
+                                      :permissions permissions
+                                      :roles roles})))
