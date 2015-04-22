@@ -122,8 +122,12 @@ java.lang.ExceptionInfo with :cause :exists."
     (context/put-role context role)))
 
 (defn revoke-role [context role-id from-id as-id]
-  (assert-authorized context from-id :update as-id)
+  (assert-authorized context from-id #{:update} as-id)
   (let [role (update-in (get-role context role-id)
                             [:roles]
                             #(set (conj %1 from-id)))]
     (context/put-role context role)))
+
+(defn list-roles [context as-id]
+  (assert-authorized context "roles" #{:read} as-id)
+  (set (context/list-roles context)))

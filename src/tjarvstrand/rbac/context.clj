@@ -35,7 +35,10 @@
     "Return role with id from context")
 
   (delete-role [context id]
-    "Delete role with id from context"))
+    "Delete role with id from context")
+
+  (list-roles [context]
+    "Return the set of all role IDs"))
 
 (defn role
   ([id]                   (role id {}))

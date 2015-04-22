@@ -29,7 +29,10 @@
       (get-in rbac [:roles id]))
 
     (delete-role [rbac id]
-      (assoc-in rbac [:roles id] nil)))
+      (assoc-in rbac [:roles id] nil))
+
+    (list-roles [rbac]
+      (keys (:roles rbac))))
 
 (defn new []
   (map->RBAC {:roles {}
