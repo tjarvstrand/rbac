@@ -45,7 +45,7 @@ to perform in the given context."
   (= #{} (unauthorized-actions context resource-id #{action} as-id)))
 
 
-(defn- assert-authorized
+(defn assert-authorized
   "Return iff as-id is is authorized permission on resource-id in context,
 otherwise throws java.lang.ExceptionInfo with :cause :unauthorized."
   [context resource-id actions as-id]
