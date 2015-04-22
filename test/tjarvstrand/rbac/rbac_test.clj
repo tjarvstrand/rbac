@@ -101,6 +101,7 @@
 
 (fact "When a role is created the creator gains full permissions on it."
   (-> (init-rbac)
+      (grant-permissions "roles" #{:create} "alice" "superuser")
       (create-role "chuck" "alice")
       (unauthorized-actions ["roles" "chuck"] all-role-permissions "alice"))
       => #{})
@@ -112,3 +113,6 @@
       (create-role "alice" "superuser")
       (authorized? ["a"] :read "alice"))
       => false)
+
+(fact "Roles can be listed by a user with the correct permissions"
+  (list-roles (init-rbac) "superuser") => #{"alice" "bob" "carol"})

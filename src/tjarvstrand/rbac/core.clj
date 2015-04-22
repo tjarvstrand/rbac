@@ -53,7 +53,7 @@ otherwise throws java.lang.ExceptionInfo with :cause :unauthorized."
     (when-not (= #{} unauthorized)
       (throw (ex-info (format "Role %s does not have permission %s on %s"
                               as-id
-                              actions
+                              (string/join ", " actions)
                               resource-id)
                       {:cause     :unauthorized
                        :actions    actions
@@ -69,7 +69,7 @@ java.lang.ExceptionInfo with :cause :exists."
                     {:cause    :exists
                      :role id}))))
 
-(defn- add-permissions [context on-id permissions to-id]
+(defn put-permissions [context on-id permissions to-id]
   (if (= (context/get-superuser-id context) to-id)
     context
     (let [role (update-in (get-role context to-id)
@@ -77,7 +77,7 @@ java.lang.ExceptionInfo with :cause :exists."
                           #(set (into %1 permissions)))]
       (context/put-role context role))))
 
-(defn- remove-permissions [context on-id permissions to-id]
+(defn- delete-permissions [context on-id permissions to-id]
   (if (= (context/get-superuser-id context) to-id)
     context
     (let [role (update-in (get-role context to-id)
@@ -86,26 +86,27 @@ java.lang.ExceptionInfo with :cause :exists."
       (context/put-role context role))))
 
 (defn create-role [context id as-id]
+  (assert-authorized context "roles" #{:create} as-id)
   (-> context
       (context/put-role (context/role id))
-      (add-permissions ["roles" id] all-role-permissions as-id)))
+      (put-permissions ["roles" id] all-role-permissions as-id)))
 
 (defn read-role [context id as-id]
-  (assert-authorized context ["roles" id] :read as-id)
+  (assert-authorized context ["roles" id] #{:read} as-id)
   (get-role context id))
 
 (defn delete-role [context id as-id]
-  (assert-authorized context ["roles" id] :delete as-id)
+  (assert-authorized context ["roles" id] #{:delete} as-id)
   (context/delete-role context id))
 
 (defn grant-permissions [context on-id permissions to-id as-id]
   (assert-authorized context on-id (set (conj permissions :grant)) as-id)
   (assert-authorized context ["roles" to-id] #{:update} as-id)
-  (add-permissions context on-id permissions to-id))
+  (put-permissions context on-id permissions to-id))
 
 (defn revoke-permissions [context on-id permissions to-id as-id]
   (assert-authorized context ["roles" to-id] #{:update} as-id)
-  (remove-permissions context on-id permissions to-id))
+  (delete-permissions context on-id permissions to-id))
 
 (defn grant-role-permissions [context on-id permissions to-id as-id]
   (grant-permissions context ["roles" on-id] permissions to-id as-id))
@@ -114,17 +115,17 @@ java.lang.ExceptionInfo with :cause :exists."
   (revoke-permissions context ["roles" on-id] permissions to-id as-id))
 
 (defn grant-role [context role-id to-id as-id]
-  (assert-authorized context role-id :grant as-id)
+  (assert-authorized context role-id #{:grant} as-id)
   (assert-authorized context to-id :update as-id)
   (let [role (update-in (get-role context role-id)
-                            [:roles]
+                            ["roles"]
                             #(set (conj %1 to-id)))]
     (context/put-role context role)))
 
 (defn revoke-role [context role-id from-id as-id]
   (assert-authorized context from-id #{:update} as-id)
   (let [role (update-in (get-role context role-id)
-                            [:roles]
+                            ["roles"]
                             #(set (conj %1 from-id)))]
     (context/put-role context role)))
 
