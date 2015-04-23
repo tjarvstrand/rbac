@@ -19,17 +19,19 @@
             [tjarvstrand.rbac.context      :as context]
             [tjarvstrand.rbac.mock-context :as mock-context]))
 
+(def superadmin "superadmin")
+
 (defn- init-rbac []
-  (-> (mock-context/new)
-      (context/put-role (context/role "alice"))
-      (context/put-role (context/role "bob"))
-      (context/put-role (context/role "carol"))))
+  (-> {:roles {} :superadmin superadmin}
+      (create-role "alice" superadmin)
+      (create-role "bob" superadmin)
+      (create-role "carol" superadmin)))
 
 (fact "superuser has full access."
-  (authorized? (init-rbac) [] :create "superuser") => truthy
-  (authorized? (init-rbac) [] :read   "superuser") => truthy
-  (authorized? (init-rbac) [] :update "superuser") => truthy
-  (authorized? (init-rbac) [] :delete "superuser") => truthy)
+  (authorized? (init-rbac) [] :create superadmin) => truthy
+  (authorized? (init-rbac) [] :read   superadmin) => truthy
+  (authorized? (init-rbac) [] :update superadmin) => truthy
+  (authorized? (init-rbac) [] :delete superadmin) => truthy)
 
 (fact "By default, alice has no access on the root level"
   (authorized? (init-rbac) [] :create "alice") => falsey
@@ -44,12 +46,8 @@
   (authorized? (init-rbac) ["roles" "alice"] :delete "alice") => falsey
   (authorized? (init-rbac) ["roles" "alice"] :create "alice") => falsey)
 
-
-(fact "A non-existing client can't perform any actions") ;; TODO
-
-
 (fact "A role can't grant permissions to a non-existing role"
-  (grant-permissions (init-rbac) [] [:read] "chuck" "superuser")
+  (grant-permissions (init-rbac) [] [:read] "chuck" superadmin)
   => (throws clojure.lang.ExceptionInfo
              #(and (= :no-exists (-> % ex-data :cause))
                    (= "chuck"    (-> % ex-data :role)))))
@@ -69,7 +67,7 @@
 (fact "A role with :grant permission can't grant its permissions to another role
  on which it doesn't have :update permission"
   (-> (init-rbac)
-      (grant-permissions [] [:create :grant] "alice" "superuser")
+      (grant-permissions [] [:create :grant] "alice" superadmin)
       (grant-permissions [] #{:create}        "bob" "alice"))
   => (throws clojure.lang.ExceptionInfo
              #(and (= :unauthorized (-> % ex-data :cause))
@@ -78,15 +76,15 @@
 
 (fact "A role with :grant permission can grant its permissions to another role"
   (-> (init-rbac)
-      (grant-permissions      [] #{:create :grant} "alice" "superuser")
-      (grant-role-permissions "bob" #{:update}     "alice" "superuser")
+      (grant-permissions      [] #{:create :grant} "alice" superadmin)
+      (grant-role-permissions "bob" #{:update}     "alice" superadmin)
       (grant-permissions      [] #{:create}        "bob" "alice")
       (authorized? [] :create "bob"))
   => truthy)
 
 (fact "A role with :grant permission can't grant permissions it doesn't have"
   (-> (init-rbac)
-      (grant-permissions [] [:grant] "alice" "superuser")
+      (grant-permissions [] [:grant] "alice" superadmin)
       (grant-permissions [] [:create] "bob" "alice")
       (authorized? [] :create "bob"))
   => (throws clojure.lang.ExceptionInfo
@@ -95,24 +93,25 @@
 
 (fact "Role members are not given any permissions on the role by default"
   (-> (init-rbac)
-      (grant-role "alice" "bob" "superuser")
+      (grant-role "alice" "bob" superadmin)
       (authorized? "alice" :read "bob"))
       => falsey)
 
 (fact "When a role is created the creator gains full permissions on it."
   (-> (init-rbac)
-      (grant-permissions "roles" #{:create} "alice" "superuser")
+      (grant-permissions [:roles] #{:create} "alice" superadmin)
       (create-role "chuck" "alice")
-      (unauthorized-actions ["roles" "chuck"] all-role-permissions "alice"))
+      (unauthorized-actions [:roles "chuck"] all-role-permissions "alice"))
       => #{})
 
 (fact "When a role is deleted and re-created it does not regain its permissions"
   (-> (init-rbac)
-      (grant-permissions ["a"] #{:read} "alice" "superuser")
-      (delete-role "alice" "superuser")
-      (create-role "alice" "superuser")
-      (authorized? ["a"] :read "alice"))
+      (grant-permissions ["a"] #{:read} "alice" superadmin)
+      (delete-role "alice" superadmin)
+      (create-role "alice" superadmin)
+      (authorized? ["a"] :read "alice")
+      )
       => false)
 
 (fact "Roles can be listed by a user with the correct permissions"
-  (list-roles (init-rbac) "superuser") => #{"alice" "bob" "carol"})
+  (list-roles (init-rbac) superadmin) => '("alice" "bob" "carol"))

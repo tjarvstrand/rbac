@@ -24,21 +24,18 @@
 (defprotocol Context
   "Role Based Access Control"
 
-  (get-superuser-id [context]
+  (get-superadmin-id [context]
     "Return the ID of the superuser")
-
-  (put-role [context role]
-    (str "Put role into context, overwriting any existing Role with the "
-         "same id."))
-
-  (get-role [context id]
-    "Return role with id from context")
 
   (delete-role [context id]
     "Delete role with id from context")
 
   (list-roles [context]
     "Return the set of all role IDs"))
+
+(defn new-default-context []
+  (map->DefaultContext {"roles" {}
+                        :superuser-id "superuser"}))
 
 (defn role
   ([id]                   (role id {}))
