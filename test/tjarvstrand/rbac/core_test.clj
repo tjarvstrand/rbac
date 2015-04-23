@@ -13,11 +13,9 @@
 ;; See the License for the specific language governing permissions and
 ;; limitations under the License.
 
-(ns tjarvstrand.rbac.rbac-test
+(ns tjarvstrand.rbac.core-test
   (:use midje.sweet)
-  (:require [tjarvstrand.rbac.core         :refer :all]
-            [tjarvstrand.rbac.context      :as context]
-            [tjarvstrand.rbac.mock-context :as mock-context]))
+  (:require [tjarvstrand.rbac.core         :refer :all]))
 
 (def superadmin "superadmin")
 
@@ -73,12 +71,11 @@
              #(and (= :unauthorized (-> % ex-data :cause))
                    (= "alice"       (-> % ex-data :as)))))
 
-
 (fact "A role with :grant permission can grant its permissions to another role"
   (-> (init-rbac)
-      (grant-permissions      [] #{:create :grant} "alice" superadmin)
-      (grant-role-permissions "bob" #{:update}     "alice" superadmin)
-      (grant-permissions      [] #{:create}        "bob" "alice")
+      (grant-permissions [] #{:create :grant} "alice" superadmin)
+      (grant-role-permissions "bob" #{:update} "alice" superadmin)
+      (grant-permissions [] #{:create} "bob" "alice")
       (authorized? [] :create "bob"))
   => truthy)
 
@@ -109,8 +106,7 @@
       (grant-permissions ["a"] #{:read} "alice" superadmin)
       (delete-role "alice" superadmin)
       (create-role "alice" superadmin)
-      (authorized? ["a"] :read "alice")
-      )
+      (authorized? ["a"] :read "alice"))
       => false)
 
 (fact "Roles can be listed by a user with the correct permissions"

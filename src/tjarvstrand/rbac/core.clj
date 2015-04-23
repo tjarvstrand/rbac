@@ -18,26 +18,49 @@
             [clojure.set              :as set]
             [tjarvstrand.rbac.context :as ctx]))
 
-
 (def all-role-permissions #{:read :update :delete :grant})
 
-(defn- get-role [ctx id]
-  (if-let [role (get-in ctx [:roles id])]
+(defn- role
+  ([id]                   (role id {}))
+  ([id permissions]       (role id {} #{}))
+  ([id permissions roles] {:id id
+                           :permissions permissions
+                           :roles roles}))
+
+(defn- put-role
+  ([ctx role]    (update-role ctx role (:id role)))
+  ([ctx role id] (assoc-in ctx [:roles id] role)))
+
+(defn- get-role [ctx role-id]
+  (get-in ctx [:roles role-id]))
+
+(defn- get-role-unsafe [ctx id]
+  (if-let [role (get-role ctx id)]
     role
     (throw (ex-info (format   "Role %s doesn't exist" id)
                     {:cause   :no-exists
                      :role    id
                      :context ctx}))))
 
-(defn- update-role
-  ([ctx role]    (update-role ctx role (:id role)))
-  ([ctx role id] (assoc-in ctx [:roles id] role)))
-
 (defn- update-in-role [ctx role-id keys update-fn]
-  (update-role ctx (update-in (get-role ctx role-id) keys update-fn)))
+  (update-role ctx (update-in (get-role-unsafe ctx role-id) keys update-fn)))
 
-(defn- put-role [ctx role]
-  (assoc-in ctx [:roles (:id role)] role))
+(defn- put-permissions [ctx on-id permissions to-id]
+  (if (= (:superadmin ctx) to-id)
+    ctx
+    (update-in-role ctx
+                    to-id
+                    [:permissions on-id]
+                    #(set (into permissions %)))))
+
+(defn- delete-permissions [ctx on-id permissions to-id]
+  (if (= (:superadmin ctx) to-id)
+    ctx
+    (update-in-role ctx
+                    to-id
+                    [:permissions on-id]
+                    #(do (println %) (set/difference % permissions)))))
+
 
 (defn unauthorized-actions
   "Return a set of the permissions in actions that as-id is not allowed
@@ -76,33 +99,17 @@ otherwise throws java.lang.ExceptionInfo with :cause :unauthorized."
   "Return iff there is no resource with id in ctx, otherwise throws
 java.lang.ExceptionInfo with :cause :exists."
   [ctx id]
-  (if (get-in ctx [:roles id])
+  (if (ctx/get-role ctx id)
     (throw (ex-info (format   "Role %s already exists" id)
                     {:cause   :exists
                      :role    id
                      :context ctx}))))
 
-(defn put-permissions [ctx on-id permissions to-id]
-  (if (= (:superadmin ctx) to-id)
-    ctx
-    (update-in-role ctx
-                    to-id
-                    [:permissions on-id]
-                    #(set (into permissions %)))))
-
-(defn- delete-permissions [ctx on-id permissions to-id]
-  (if (= (:superadmin ctx) to-id)
-    ctx
-    (update-in-role ctx
-                    to-id
-                    [:permissions on-id]
-                    #(do (println %) (set/difference % permissions)))))
-
 (defn create-role [ctx id as-id]
   (assert-authorized ctx [:roles] #{:create} as-id)
   (-> ctx
-      (put-role (ctx/role id))
-      (put-permissions [:roles id] all-role-permissions as-id)))
+      (ctx/put-role (ctx/role id))
+      (ctx/put-permissions [:roles id] ctx/all-role-permissions as-id)))
 
 (defn read-role [ctx id as-id]
   (assert-authorized ctx [:roles id] #{:read} as-id)
@@ -115,11 +122,11 @@ java.lang.ExceptionInfo with :cause :exists."
 (defn grant-permissions [ctx on-id permissions to-id as-id]
   (assert-authorized ctx on-id (set (conj permissions :grant)) as-id)
   (assert-authorized ctx [:roles to-id] #{:update} as-id)
-  (put-permissions ctx on-id permissions to-id))
+  (ctx/put-permissions ctx on-id permissions to-id))
 
 (defn revoke-permissions [ctx on-id permissions to-id as-id]
   (assert-authorized ctx [:roles to-id] #{:update} as-id)
-  (delete-permissions ctx on-id permissions to-id))
+  (ctx/delete-permissions ctx on-id permissions to-id))
 
 (defn grant-role-permissions [ctx on-id permissions to-id as-id]
   (grant-permissions ctx [:roles on-id] permissions to-id as-id))
@@ -130,13 +137,13 @@ java.lang.ExceptionInfo with :cause :exists."
 (defn grant-role [ctx role-id to-id as-id]
   (assert-authorized ctx role-id #{:grant} as-id)
   (assert-authorized ctx to-id :update as-id)
-  (let [role (update-role ctx role-id #(set (conj %1 to-id)))]
-    (put-role ctx role)))
+  (let [role (update-in-role ctx role-id [:roles] #(set (conj %1 to-id)))]
+    (ctx/put-role ctx role)))
 
 (defn revoke-role [ctx role-id from-id as-id]
   (assert-authorized ctx from-id #{:update} as-id)
-  (let [role (update-role ctx role-id #(set (conj %1 from-id)))]
-    (put-role ctx role)))
+  (let [role (update-in-role ctx role-id [:roles] #(set (conj %1 from-id)))]
+    (ctx/put-role ctx role)))
 
 (defn list-roles [ctx as-id]
   (assert-authorized ctx [:roles] #{:read} as-id)
